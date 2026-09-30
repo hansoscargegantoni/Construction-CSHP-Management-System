@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSHP SafetyHub | Construction Health & Safety Program Management</title>
+  <meta name="description" content="Manage Construction Health and Safety Program (CSHP) contracts, track PCAB licenses, and detect real-time Safety Officer and First Aider assignment conflicts pursuant to DOLE DO-13 guidelines.">
+  <link rel="stylesheet" href="./css/main.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <link rel="stylesheet" href="./css/modals.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Top Header & Brand -->
+    <header class="header-banner">
+      <div class="brand-wrapper">
+        <div class="brand-logo-icon">🛡️</div>
+        <div class="brand-titles">
+          <h1>CSHP SafetyHub</h1>
+          <div class="brand-tagline">
+            Construction Health & Safety Program Management
+            <span class="tag-standard">DOLE DO-13 COMPLIANT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" id="btn-export-csv" title="Export current contracts registry as CSV">
+          📊 Export CSV
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-export-json" title="Download complete database JSON backup">
+          💾 Backup JSON
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-trigger-import" title="Import contracts from JSON file">
+          📥 Import
+        </button>
+        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+        <button class="btn btn-outline-danger btn-sm" id="btn-reset-sample" title="Reset database to initial sample records">
+          🔄 Reset Sample
+        </button>
+        <button class="btn btn-primary" id="btn-add-contract">
+          ➕ New Contract
+        </button>
+      </div>
+    </header>
+
+    <!-- Overview Stats Banner -->
+    <section class="stats-grid" aria-label="System Metrics Overview">
+      <div class="stat-card stat-blue">
+        <div class="stat-content">
+          <div class="stat-label">Total Contracts</div>
+          <div class="stat-value" id="stat-total-contracts">0</div>
+        </div>
+        <div class="stat-icon">📑</div>
+      </div>
+
+      <div class="stat-card stat-emerald">
+        <div class="stat-content">
+          <div class="stat-label">Active Projects</div>
+          <div class="stat-value" id="stat-active-projects">0</div>
+        </div>
+        <div class="stat-icon">🏗️</div>
+      </div>
+
+      <div class="stat-card stat-amber">
+        <div class="stat-content">
+          <div class="stat-label">Safety Officers</div>
+          <div class="stat-value" id="stat-safety-officers">0</div>
+        </div>
+        <div class="stat-icon">👷</div>
+      </div>
+
+      <div class="stat-card stat-purple">
+        <div class="stat-content">
+          <div class="stat-label">First Aiders</div>
+          <div class="stat-value" id="stat-first-aiders">0</div>
+        </div>
+        <div class="stat-icon">🩹</div>
+      </div>
+
+      <div class="stat-card stat-rose stat-card-conflicts" id="stat-card-conflicts" title="Click to filter contracts in conflict">
+        <div class="stat-content">
+          <div class="stat-label">Assignment Conflicts</div>
+          <div class="stat-value" id="stat-conflicts">0</div>
+        </div>
+        <div class="stat-icon">⚠️</div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="view-tabs-bar" aria-label="Main Navigation">
+      <button class="nav-tab active" data-view="contracts">
+        📋 Contracts Registry & Management
+      </button>
+      <button class="nav-tab" data-view="roster">
+        👷 Personnel Roster & Conflict Matrix
+      </button>
+    </nav>
+
+    <!-- VIEW 1: CONTRACTS REGISTRY -->
+    <main id="view-contracts-section">
+      <!-- Search & Filters Toolbar -->
+      <div class="control-bar">
+        <div class="search-and-filters">
+          <div class="search-input-group">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              id="search-contracts" 
+              class="form-control" 
+              placeholder="Search by Contract ID, Name, Contractor, PCAB, or Safety Personnel..." 
+            />
+          </div>
+
+          <select id="filter-status" class="form-control filter-select">
+            <option value="ALL">Status: All Projects</option>
+            <option value="Active">Active / Ongoing</option>
+            <option value="Under Review">Under Review</option>
+            <option value="Completed">Completed</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+
+          <select id="filter-conflict" class="form-control filter-select">
+            <option value="ALL">Conflict Check: All Records</option>
+            <option value="CONFLICT_ONLY">⚠️ Double-Booked / Conflict Only</option>
+            <option value="CLEAN_ONLY">✓ Compliant / Clean Only</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Contracts Table Container -->
+      <div id="contracts-table-container"></div>
+    </main>
+
+    <!-- VIEW 2: PERSONNEL ROSTER & CONFLICT MATRIX -->
+    <section id="view-roster-section" style="display: none;">
+      <div id="roster-container"></div>
+    </section>
+
+  </div> <!-- /app-container -->
+
+  <!-- ========================================================================
+       MODAL 1: Add / Edit Contract
+       ======================================================================== -->
+  <div class="modal-overlay" id="modal-contract-form" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-dialog modal-dialog-large">
+      <div class="modal-header">
+        <h3 id="modal-title">Create New CSHP Contract Record</h3>
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+
+      <form id="contract-form">
+        <div class="modal-body">
+
+          <!-- Dynamic Live Conflict Alert Box -->
+          <div id="live-conflict-banner" class="live-conflict-banner"></div>
+
+          <!-- Section 1: Project Identification -->
+          <div class="form-section">
+            <div class="section-legend">📌 Contract Identification & Location</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="form-id">Contract ID <span class="required">*</span></label>
+                <input type="text" id="form-id" class="form-control" placeholder="e.g. 24-INFRA-0104" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-location">Contract Location <span class="required">*</span></label>
+                <input type="text" id="form-location" class="form-control" placeholder="e.g. Brgy. Dela Paz, Pasig City" required />
+              </div>
+              <div class="form-group full-width">
+                <label class="form-label" for="form-name">Contract / Project Name <span class="required">*</span></label>
+                <input type="text" id="form-name" class="form-control" placeholder="e.g. Construction of 4-Storey Disaster Evacuation Center" required />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Contractor & PCAB License -->
+          <div class="form-section">
+            <div class="section-legend">🏢 Contractor & Accreditation</div>
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label class="form-label" for="form-contractor">Contractor Name <span class="required">*</span></label>
+                <input type="text" id="form-contractor" class="form-control" placeholder="e.g. PrimeAsia Builders Corp." required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-pcab-license">PCAB License No.</label>
+                <input type="text" id="form-pcab-license" class="form-control" placeholder="e.g. 38912-AAAA" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-pcab-category">PCAB Category</label>
+                <select id="form-pcab-category" class="form-control"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Safety Officer Designation -->
+          <div class="form-section">
+            <div class="section-legend">👷 Safety Officer Designation (DOLE DO-13)</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="form-so-name">Safety Officer Full Name</label>
+                <input type="text" id="form-so-name" list="so-suggestions" class="form-control" placeholder="e.g. Engr. Ricardo Mendoza" />
+                <datalist id="so-suggestions"></datalist>
+                <small class="text-muted">Type to select or add new. Conflict check runs automatically.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-so-level">Accreditation Level</label>
+                <select id="form-so-level" class="form-control"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-so-accreditation">DOLE Accreditation / Certificate No.</label>
+                <input type="text" id="form-so-accreditation" class="form-control" placeholder="e.g. DOLE-NCR-OSH-2023-7721" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-so-contact">Contact Number</label>
+                <input type="text" id="form-so-contact" class="form-control" placeholder="e.g. 0917-555-0192" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: First Aider Designation -->
+          <div class="form-section">
+            <div class="section-legend">🩹 Certified First Aider Designation</div>
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label class="form-label" for="form-fa-name">First Aider Full Name</label>
+                <input type="text" id="form-fa-name" list="fa-suggestions" class="form-control" placeholder="e.g. Ma. Elena D. Bautista, RN" />
+                <datalist id="fa-suggestions"></datalist>
+                <small class="text-muted">Conflict check runs automatically.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-fa-certificate">PRC / Red Cross Certificate No.</label>
+                <input type="text" id="form-fa-certificate" class="form-control" placeholder="e.g. PRC-FA-2023-8819" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-fa-contact">Contact Number</label>
+                <input type="text" id="form-fa-contact" class="form-control" placeholder="e.g. 0920-555-4321" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 5: Schedule & Scope -->
+          <div class="form-section">
+            <div class="section-legend">📅 Schedule, Workers & Project Status</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="form-start-date">Project Start Date</label>
+                <input type="date" id="form-start-date" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-completion-date">Target Completion Date</label>
+                <input type="date" id="form-completion-date" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-workers">Estimated Peak Workers on Site</label>
+                <input type="number" id="form-workers" class="form-control" min="1" placeholder="e.g. 65" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="form-status">Project Status <span class="required">*</span></label>
+                <select id="form-status" class="form-control" required></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 6: Remarks -->
+          <div class="form-section">
+            <div class="section-legend">📝 CSHP Remarks & Evaluator Notes</div>
+            <div class="form-group">
+              <textarea id="form-remarks" class="form-control" rows="3" placeholder="Enter any notes, CSHP evaluation comments, or contractor compliance remarks..."></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-contract">💾 Save Contract</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL 2: Details & Compliance Notice Drawer
+       ======================================================================== -->
+  <div class="modal-overlay" id="modal-contract-details" role="dialog" aria-modal="true" aria-labelledby="details-title">
+    <div class="modal-dialog modal-dialog-large">
+      <div class="modal-header">
+        <h3 id="details-title">📋 Contract Specifications & CSHP Evaluation</h3>
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body modal-body-dynamic">
+        <!-- Rendered dynamically by DetailsModal -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Notifications Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Bootstrap Application Module -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
